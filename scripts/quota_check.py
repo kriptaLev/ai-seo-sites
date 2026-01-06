@@ -1,31 +1,32 @@
 import os
 import sys
 from google import genai
-from google.genai.errors import ClientError
-
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+from google.genai import errors
 
 def check_quota():
+    client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+
     try:
-        # минимальный, почти бесплатный запрос
-        r = client.models.generate_content(
-            model="models/gemini-2.0-flash",
-            contents="Ответь одним словом: ok"
+        client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents="ping"
         )
         print("✅ КВОТА ДОСТУПНА")
         return True
 
-    except ClientError as e:
-        if e.status_code == 429:
+    except errors.ClientError as e:
+        msg = str(e)
+
+        if "RESOURCE_EXHAUSTED" in msg or "429" in msg:
             print("❌ КВОТА ИСЧЕРПАНА (429 RESOURCE_EXHAUSTED)")
-            print("⏳ Нужно подождать, пока Google откроет лимиты")
             return False
-        else:
-            print("❌ ДРУГАЯ ОШИБКА API:")
-            print(e)
-            return False
+
+        print("❌ ДРУГАЯ ОШИБКА API:")
+        print(msg)
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     ok = check_quota()
     if not ok:
-        sys.exit(1)
+        sys.exit(0)  # ❗ ВАЖНО: НЕ РОНЯЕМ WORKFLOW
