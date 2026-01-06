@@ -3,12 +3,11 @@ name: Generate Crypto Articles
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 4 * * *"
+    - cron: "0 */6 * * *"
 
 jobs:
   generate:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -17,17 +16,9 @@ jobs:
           python-version: "3.11"
 
       - name: Install deps
-        run: pip install google-generativeai
+        run: pip install -r requirements.txt
 
       - name: Generate articles
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python scripts/generat.py
-
-      - name: Commit pages
-        run: |
-          git config user.name "seo-bot"
-          git config user.email "seo@bot.com"
-          git add pages topic_memory.json
-          git commit -m "auto: add crypto articles" || echo "No changes"
-          git push
