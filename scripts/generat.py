@@ -1,40 +1,104 @@
-import google.generativeai as genai
-import json, os, random, re, uuid, time
+import os
+import json
+import datetime
+from google import genai
 
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-model = genai.GenerativeModel("models/gemini-1.5-pro")
-# ---------- CONFIG ----------
-with open("config.json", "r", encoding="utf-8") as f:
+# ===== PATHS =====
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+PAGES_DIR = os.path.join(BASE_DIR, "pages")
+CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
+
+os.makedirs(PAGES_DIR, exist_ok=True)
+
+# ===== LOAD CONFIG =====
+with open(CONFIG_PATH, "r", encoding="utf-8") as f:
     config = json.load(f)
 
-ARTICLES_COUNT = config["articles_per_run"]
-MAX_NARROW = config["max_articles_per_narrow_topic"]
-MAX_BROAD = config["max_articles_per_broad_topic"]
+ARTICLES_PER_RUN = config.get("articles_per_run", 3)
+MIN_WORDS = config.get("min_words", 1000)
 
-# ---------- MEMORY ----------
-MEMORY_FILE = "topic_memory.json"
-if os.path.exists(MEMORY_FILE):
-    with open(MEMORY_FILE, "r", encoding="utf-8") as f:
-        topic_memory = json.load(f)
-else:
-    topic_memory = {}
+# ===== GEMINI =====
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-os.makedirs("pages", exist_ok=True)
+# ===== TOPIC GENERATION =====
+def generate_topic():
+    prompt = """
+Придумай ОДНУ уникальную, легальную и SEO-востребованную тему статьи про криптовалюты.
 
-# ---------- HELPERS ----------
-def slugify(text):
-    text = text.lower()
-    text = re.sub(r'[^а-яa-z0-9 ]', '', text)
-    return "-".join(text.split())[:70]
+Правила:
+- не новость
+- не скам
+- не инвестиционный совет
+- тема может быть широкой или узкой
+- избегай точных повторов популярных заголовков
+- просто тема, без кавычек и пояснений
+"""
+    r = client.models.generate_content(
+        model="models/gemini-1.5-pro",
+        contents=prompt
+    )
+    return r.text.strip()
 
-def unique_filename(topic):
-    return f"{slugify(topic)}-{uuid.uuid4().hex[:6]}.md"
+# ===== ARTICLE GENERATION =====
+def generate_article(topic):
+    prompt = f"""
+Ты опытный крипто-энтузиаст и автор, который давно в индустрии.
 
-def save_memory():
-    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(topic_memory, f, ensure_ascii=False, indent=2)
+Напиши ЖИВУЮ статью на тему:
+{topic}
 
-# ---------- TOPIC GENERATION ----------
+Требования:
+- минимум {MIN_WORDS} слов
+- человеческий стиль
+- можно писать от первого лица
+- делиться опытом, ошибками, наблюдениями
+- структура НЕ шаблонная
+
+ДОБАВЛЯЙ ТОЛЬКО ЕСЛИ УМЕСТНО:
+- подзаголовки
+- списки
+- таблицы (markdown)
+- FAQ
+- практические советы
+- типичные ошибки новичков
+- вывод
+
+Запрещено:
+- обещания дохода
+- инвестиционные рекомендации
+- незаконные схемы
+
+Формат: Markdown.
+"""
+    r = client.models.generate_content(
+        model="models/gemini-1.5-pro",
+        contents=prompt
+    )
+    return r.text.strip()
+
+# ===== SAVE =====
+def save_article(topic, content):
+    safe = "".join(c for c in topic if c.isalnum() or c in " _-").strip()
+    filename = safe.replace(" ", "_").lower()[:80]
+    ts = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+
+    path = os.path.join(PAGES_DIR, f"{filename}_{ts}.md")
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(f"# {topic}\n\n{content}")
+
+    print(f"✅ Saved: {path}")
+
+# ===== MAIN =====
+def main():
+    for i in range(ARTICLES_PER_RUN):
+        print(f"--- {i+1}/{ARTICLES_PER_RUN} ---")
+        topic = generate_topic()
+        article = generate_article(topic)
+        save_article(topic, article)
+
+if __name__ == "__main__":
+    main()# ---------- TOPIC GENERATION ----------
 def generate_topic():
     prompt = """
 Ты аналитик крипторынка и SEO-редактор.
