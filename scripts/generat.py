@@ -20,8 +20,7 @@ MIN_WORDS = config.get("min_words", 1000)
 # ===== GEMINI =====
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-MODEL_NAME = "models/gemini-1.5-flash"  # ✅ РАБОЧАЯ МОДЕЛЬ
-
+MODEL_NAME = "gemini-1.0-pro"
 # ===== TOPIC GENERATION =====
 def generate_topic():
     prompt = """
