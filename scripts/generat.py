@@ -1,80 +1,78 @@
 import os
 import json
 import datetime
+import time
 from google import genai
 
 # ===== CONFIG =====
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.json")
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
+PAGES_DIR = os.path.join(BASE_DIR, "pages")
+os.makedirs(PAGES_DIR, exist_ok=True)
+
 with open(CONFIG_PATH, "r", encoding="utf-8") as f:
     config = json.load(f)
 
-ARTICLES_PER_RUN = config.get("articles_per_run", 3)
+ARTICLES_PER_RUN = config.get("articles_per_run", 1)
 MIN_WORDS = config.get("min_words", 1200)
 
 # ===== GEMINI =====
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-MODEL_NAME = "gemini-2.0-flash"
+MODEL = "gemini-2.0-flash"
 
-# ===== PATHS =====
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-PAGES_DIR = os.path.join(BASE_DIR, "pages")
-os.makedirs(PAGES_DIR, exist_ok=True)
-
-# ===== TOPIC GENERATION =====
-def generate_topic():
-    prompt = """
-Придумай ОДНУ уникальную тему статьи про криптовалюты,
-легальную, востребованную и полезную для SEO.
-Ответь только текстом — только тему.
-"""
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=prompt
-    )
-    return response.text.strip()
-
-# ===== ARTICLE GENERATION =====
-def generate_article(topic):
+# ===== GENERATE ARTICLE (ONE CALL) =====
+def generate_article():
     prompt = f"""
-Ты опытный крипто-автор, пишущий как человек.
-Напиши живую, подробную статью на тему:
-«{topic}»
+Ты опытный крипто-энтузиаст и автор.
 
-Требования:
+СДЕЛАЙ ОДНОВРЕМЕННО:
+1) придумай ОДНУ уникальную, легальную тему статьи про криптовалюты
+2) напиши большую, полезную статью по этой теме
+
+Требования к статье:
 - минимум {MIN_WORDS} слов
-- markdown-формат
-- если уместно — добавь FAQ
-- если уместно — добавь таблицы
-- списки, подзаголовки, практические советы
+- живой человеческий стиль
+- можно от первого лица
+- без инвестиционных советов
+- без обещаний дохода
+- если уместно: FAQ, таблицы, списки, подзаголовки
+- формат Markdown
 
-Запрещено:
-- инвестиционные советы
-- обещания дохода
+Верни СТРОГО в JSON, без текста вокруг:
+
+{{
+  "title": "заголовок статьи",
+  "content": "markdown-текст статьи"
+}}
 """
-    response = client.models.generate_content(
-        model=MODEL_NAME,
+
+    r = client.models.generate_content(
+        model=MODEL,
         contents=prompt
     )
-    return response.text.strip()
 
-# ===== SAVE ARTICLE =====
-def save_article(topic, content):
-    safe = "".join(c for c in topic if c.isalnum() or c in " _-").strip()
+    data = json.loads(r.text)
+    return data["title"], data["content"]
+
+# ===== SAVE =====
+def save_article(title, content):
+    safe = "".join(c for c in title if c.isalnum() or c in " _-").strip()
     filename = safe.replace(" ", "_").lower()[:80]
     ts = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     path = os.path.join(PAGES_DIR, f"{filename}_{ts}.md")
 
     with open(path, "w", encoding="utf-8") as f:
-        f.write(f"# {topic}\n\n{content}")
+        f.write(f"# {title}\n\n{content}")
 
     print(f"✅ Saved: {path}")
 
-# ===== MAIN LOOP =====
+# ===== MAIN =====
 def main():
     for i in range(ARTICLES_PER_RUN):
-        topic = generate_topic()
-        article = generate_article(topic)
-        save_article(topic, article)
+        print(f"--- {i+1}/{ARTICLES_PER_RUN} ---")
+        title, content = generate_article()
+        save_article(title, content)
+        time.sleep(20)  # ОБЯЗАТЕЛЬНО, иначе 429
 
 if __name__ == "__main__":
     main()
