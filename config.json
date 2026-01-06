@@ -1,5 +1,5 @@
 {
-  "articles_per_run": 50,
+  "articles_per_run": 5,
   "max_articles_per_narrow_topic": 3,
   "max_articles_per_broad_topic": 12
 }
