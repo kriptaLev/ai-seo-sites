@@ -3,7 +3,7 @@ name: Generate Crypto Articles
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 * * * *"   # раз в час (можно убрать, если не надо)
+    - cron: "0 */6 * * *" # раз в 6 часов
 
 jobs:
   generate:
@@ -20,23 +20,30 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
-          pip install google-genai google-generativeai
+          python -m pip install --upgrade pip
+          pip install google-generativeai
 
-      - name: Check Gemini quota
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python scripts/quota_check.py
+      - name: Ensure pages directory exists
+        run: |
+          mkdir -p pages
+          touch pages/.gitkeep
 
       - name: Generate crypto articles
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python scripts/generat.py
+        run: |
+          python scripts/generat.py || echo "Генерация не дала статей (квота/лимит)"
 
       - name: Commit and push articles
         run: |
           git config user.name "ai-seo-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add pages
-          git commit -m "Auto-generate crypto articles" || echo "Nothing to commit"
-          git push
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "Нет изменений — коммит не нужен"
+          else
+            git commit -m "Add generated crypto articles"
+            git push
+          fi
